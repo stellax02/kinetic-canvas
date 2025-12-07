@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>KInetic Canvas - Brownian Motion Trail Painting</title>
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overscroll-behavior: none;
+        overflow: hidden;
+      }
+
+      body {
+        background: radial-gradient(
+          circle at top left,
+          #020617,
+          #0b1120 30%,
+          #4c1d95 70%,
+          #020617 100%
+        );
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+          "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      }
+
+      .frame {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .canvas-wrapper {
+        position: relative;
+        width: min(96vw, 90vmin, calc(100vh - 100px));
+        aspect-ratio: 1 / 1;
+        border-radius: 1.5rem;
+        overflow: hidden;
+        box-shadow: 0 25px 50px rgba(0, 0, 0, 0.9);
+        border: 1px solid rgba(168, 85, 247, 0.4);
+        background: #020617;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        background: #020617;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <div class="canvas-wrapper">
+        <canvas id="field"></canvas>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("field");
+      const ctx = canvas.getContext("2d");
+
+      // collision toggles
+      const USE_COLLISIONS = true;
+      const DRAW_COLLISION_LINES = true;
+
+      let PARTICLE_COUNT = 80;
+      let particles = [];
+      let animationId = null;
+      let isPaused = false;
+      let animateRef = null;
+
+      // universe params
+      let DISPERSION = 0.2;
+      let SPEED_SCALE = 1.0;
+      let JITTER_SCALE = 1.0;
+      const DAMPING = 0.985;
+
+      // size & alpha ranges
+      const MIN_SIZE_FACTOR = 0.5;
+      const MAX_SIZE_FACTOR = 2.6;
+      const TRAIL_ALPHA_MIN = 0.35;
+      const TRAIL_ALPHA_MAX = 0.75;
+
+      // palette state
+      let paletteMode = 0;
+      let paletteBaseHue = 0;
+      let paletteSat = 70;
+      let paletteLight = 60;
+
+      // background color (palette-aware, but dark)
+      let bgHue = 220;
+      let bgSat = 30;
+      let bgLight = 8;
+
+      // palette metadata for names + URL slugs
+      const PALETTE_META = {
+        0: { name: "Neon Rainbow", slug: "neon-rainbow" },
+        1: { name: "Candy Pastels", slug: "candy-pastels" },
+        2: { name: "Dual Complementary", slug: "dual-complementary" },
+        3: { name: "Muted Acid", slug: "muted-acid" },
+        4: { name: "Tron", slug: "tron" },
+        5: { name: "Desert Teal Orange", slug: "desert-teal-orange" },
+        6: { name: "Matrix Green", slug: "matrix-green" },
+        7: { name: "Amélie", slug: "amelie" },
+        8: { name: "Triadic Experimental", slug: "triadic-experimental" },
+        9: { name: "Kubrick", slug: "kubrick" },
+        10: { name: "Lynchian", slug: "lynchian" },
+        11: { name: "Miró Blue", slug: "miro-blue" },
+        12: { name: "Klimt", slug: "klimt" },
+        13: { name: "Mondrian", slug: "mondrian" },
+        14: { name: "Wes Anderson", slug: "wes-anderson" },
+        15: { name: "Miami Vice", slug: "miami-vice" },
+        16: { name: "Synthwave", slug: "synthwave" },
+        17: { name: "Pokémon", slug: "pokemon" },
+        18: { name: "Blade Runner", slug: "blade-runner" },
+        19: { name: "Catholic Baroque", slug: "catholic-baroque" },
+        20: { name: "Zen / Wabi-Sabi", slug: "zen-wabi-sabi" },
+        21: { name: "Byzantine", slug: "byzantine" },
+        22: { name: "Ottoman", slug: "ottoman" },
+        23: { name: "Versace", slug: "versace" },
+        24: { name: "Gucci", slug: "gucci" },
+        25: { name: "Rothko", slug: "rothko" },
+        26: { name: "Kill Bill", slug: "kill-bill" },
+        27: { name: "Studio Ghibli", slug: "ghibli" },
+        28: { name: "Mad Max", slug: "mad-max" },
+        29: { name: "Her", slug: "her" },
+        30: { name: "Ukiyo-e", slug: "ukiyoe" },
+        31: { name: "Film Noir", slug: "film-noir" },
+
+        32: { name: "Grand Budapest Pink", slug: "grand-budapest-pink" },
+        33: {
+          name: "Moonrise Kingdom Scout Yellow",
+          slug: "moonrise-scout-yellow",
+        },
+        34: { name: "Tenenbaums Burgundy", slug: "tenenbaums-burgundy" },
+
+        35: { name: "Chapel of Light", slug: "chapel-of-light" },
+        36: { name: "Orthodox Icons", slug: "orthodox-icons" },
+        37: { name: "Sistine Ceiling Dust", slug: "sistine-ceiling-dust" },
+
+        38: { name: "Picasso Blue Period", slug: "picasso-blue-period" },
+        39: { name: "Yves Klein Ultrablue", slug: "yves-klein-ultrablue" },
+        40: { name: "Midnight Pool", slug: "midnight-pool" },
+
+        41: {
+          name: "Pulp Fiction Purple & Gold",
+          slug: "pulp-fiction-purple-gold",
+        },
+        42: { name: "Reservoir Dogs Suits", slug: "reservoir-dogs-suits" },
+        43: {
+          name: "Once Upon in Hollywood Neon",
+          slug: "once-upon-hollywood-neon",
+        },
+
+        44: { name: "Red Room Velvet", slug: "red-room-velvet" },
+        45: { name: "Blue Velvet", slug: "blue-velvet" },
+        46: {
+          name: "Mulholland Drive Sodium Lights",
+          slug: "mulholland-sodium-lights",
+        },
+
+        47: { name: "Tatami Room", slug: "tatami-room" },
+        48: {
+          name: "Karesansui (rock garden grey)",
+          slug: "karesansui-rock-garden-grey",
+        },
+        49: { name: "Hokusai Storm", slug: "hokusai-storm" },
+
+        50: { name: "Chanel Black & White", slug: "chanel-black-white" },
+        51: { name: "Prada Nylon Green", slug: "prada-nylon-green" },
+        52: { name: "YSL Night Gold", slug: "ysl-night-gold" },
+      };
+
+      function getPaletteSlug() {
+        const meta = PALETTE_META[paletteMode];
+        return meta ? meta.slug : `palette-${paletteMode}`;
+      }
+
+      function updateSeedInUrl() {
+        const slug = getPaletteSlug();
+        const randomPart = Math.random().toString(36).slice(2, 8);
+        const seedStr = `${slug}-${randomPart}`;
+        const url = new URL(window.location.href);
+        url.searchParams.set("seed", seedStr);
+        window.history.replaceState({}, "", url);
+      }
+
+      function setupCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        return {
+          width: rect.width,
+          height: rect.height,
+        };
+      }
+
+      // Universe randomization
+      function reseedUniverse() {
+        DISPERSION = 0.08 + Math.random() * 0.32; // 0.08 – 0.40
+        SPEED_SCALE = 0.6 + Math.random() * 1.1; // 0.6 – 1.7
+        JITTER_SCALE = 0.6 + Math.random() * 1.3; // 0.6 – 1.9
+        PARTICLE_COUNT = 140 + Math.floor(Math.random() * 120); // 140 – 260
+      }
+
+      // Background derived from palette hue (always very dark)
+      function reseedBackground() {
+        const base = ((paletteBaseHue % 360) + 360) % 360;
+        const offset = Math.random() * 40 - 20; // ±20°
+        bgHue = base + offset;
+        bgSat = 20 + Math.random() * 25; // 20–45%
+        bgLight = 6 + Math.random() * 6; // 6–12%
+      }
+
+      // palettes: original + cinematic / art / pop
+      function reseedPalette() {
+        const r = Math.random();
+
+        if (r < 0.18) {
+          paletteMode = 0;
+          paletteBaseHue = Math.random() * 360;
+          paletteSat = 95;
+          paletteLight = 60;
+        } else if (r < 0.36) {
+          paletteMode = 1;
+          paletteBaseHue = Math.random() * 360;
+          paletteSat = 70;
+          paletteLight = 82;
+        } else if (r < 0.54) {
+          paletteMode = 2;
+          paletteBaseHue = Math.random() * 360;
+          paletteSat = 90;
+          paletteLight = 65;
+        } else if (r < 0.72) {
+          paletteMode = 3;
+          paletteBaseHue = Math.random() * 360;
+          paletteSat = 55;
+          paletteLight = 58;
+        } else {
+          const pick = Math.floor(Math.random() * 28); // 0–27
+          switch (pick) {
+            case 0:
+              paletteMode = 4;
+              paletteBaseHue = 200;
+              paletteSat = 95;
+              paletteLight = 60;
+              break;
+            case 1:
+              paletteMode = 5;
+              paletteBaseHue = 30;
+              paletteSat = 90;
+              paletteLight = 68;
+              break;
+            case 2:
+              paletteMode = 6;
+              paletteBaseHue = 130;
+              paletteSat = 95;
+              paletteLight = 55;
+              break;
+            case 3:
+              paletteMode = 7;
+              paletteBaseHue = 100;
+              paletteSat = 80;
+              paletteLight = 65;
+              break;
+            case 4:
+              paletteMode = 8;
+              paletteBaseHue = Math.random() * 360;
+              paletteSat = 85;
+              paletteLight = 62;
+              break;
+            case 5:
+              paletteMode = 9;
+              paletteBaseHue = 200;
+              paletteSat = 40;
+              paletteLight = 60;
+              break;
+            case 6:
+              paletteMode = 10;
+              paletteBaseHue = 250;
+              paletteSat = 80;
+              paletteLight = 40;
+              break;
+            case 7:
+              paletteMode = 11;
+              paletteBaseHue = 220;
+              paletteSat = 90;
+              paletteLight = 50;
+              break;
+            case 8:
+              paletteMode = 12;
+              paletteBaseHue = 45;
+              paletteSat = 85;
+              paletteLight = 60;
+              break;
+            case 9:
+              paletteMode = 13;
+              paletteBaseHue = 0;
+              paletteSat = 100;
+              paletteLight = 55;
+              break;
+            case 10:
+              paletteMode = 14;
+              paletteBaseHue = 30;
+              paletteSat = 55;
+              paletteLight = 75;
+              break;
+            case 11:
+              paletteMode = 15;
+              paletteBaseHue = 180;
+              paletteSat = 90;
+              paletteLight = 65;
+              break;
+            case 12:
+              paletteMode = 16;
+              paletteBaseHue = 280;
+              paletteSat = 95;
+              paletteLight = 60;
+              break;
+            case 13:
+              paletteMode = 17;
+              paletteBaseHue = 0;
+              paletteSat = 100;
+              paletteLight = 60;
+              break;
+            case 14:
+              paletteMode = 18;
+              paletteBaseHue = 200;
+              paletteSat = 85;
+              paletteLight = 55;
+              break;
+            case 15:
+              paletteMode = 19;
+              paletteBaseHue = 35;
+              paletteSat = 75;
+              paletteLight = 65;
+              break;
+            case 16:
+              paletteMode = 20;
+              paletteBaseHue = 90;
+              paletteSat = 25;
+              paletteLight = 60;
+              break;
+            case 17:
+              paletteMode = 21;
+              paletteBaseHue = 45;
+              paletteSat = 85;
+              paletteLight = 60;
+              break;
+            case 18:
+              paletteMode = 22;
+              paletteBaseHue = 350;
+              paletteSat = 90;
+              paletteLight = 55;
+              break;
+            case 19:
+              paletteMode = 23;
+              paletteBaseHue = 45;
+              paletteSat = 95;
+              paletteLight = 60;
+              break;
+            case 20:
+              paletteMode = 24;
+              paletteBaseHue = 140;
+              paletteSat = 85;
+              paletteLight = 55;
+              break;
+            case 21:
+              paletteMode = 25;
+              paletteBaseHue = 20;
+              paletteSat = 70;
+              paletteLight = 55;
+              break;
+            case 22:
+              paletteMode = 26;
+              paletteBaseHue = 50;
+              paletteSat = 95;
+              paletteLight = 65;
+              break;
+            case 23:
+              paletteMode = 27;
+              paletteBaseHue = 120;
+              paletteSat = 65;
+              paletteLight = 70;
+              break;
+            case 24:
+              paletteMode = 28;
+              paletteBaseHue = 35;
+              paletteSat = 85;
+              paletteLight = 65;
+              break;
+            case 25:
+              paletteMode = 29;
+              paletteBaseHue = 10;
+              paletteSat = 75;
+              paletteLight = 70;
+              break;
+            case 26:
+              paletteMode = 30;
+              paletteBaseHue = 220;
+              paletteSat = 80;
+              paletteLight = 55;
+              break;
+            case 27:
+              paletteMode = 31;
+              paletteBaseHue = 220;
+              paletteSat = 25;
+              paletteLight = 35;
+              break;
+            default: {
+              const extraIndex = pick - 28; // 0–20
+              const mode = 32 + extraIndex; // 32–52
+              paletteMode = mode;
+
+              switch (mode) {
+                case 32:
+                  paletteBaseHue = 345;
+                  paletteSat = 70;
+                  paletteLight = 82;
+                  break;
+                case 33:
+                  paletteBaseHue = 48;
+                  paletteSat = 80;
+                  paletteLight = 78;
+                  break;
+                case 34:
+                  paletteBaseHue = 350;
+                  paletteSat = 70;
+                  paletteLight = 38;
+                  break;
+                case 35:
+                  paletteBaseHue = 40;
+                  paletteSat = 40;
+                  paletteLight = 88;
+                  break;
+                case 36:
+                  paletteBaseHue = 32;
+                  paletteSat = 80;
+                  paletteLight = 55;
+                  break;
+                case 37:
+                  paletteBaseHue = 210;
+                  paletteSat = 25;
+                  paletteLight = 78;
+                  break;
+                case 38:
+                  paletteBaseHue = 215;
+                  paletteSat = 70;
+                  paletteLight = 45;
+                  break;
+                case 39:
+                  paletteBaseHue = 225;
+                  paletteSat = 100;
+                  paletteLight = 50;
+                  break;
+                case 40:
+                  paletteBaseHue = 200;
+                  paletteSat = 65;
+                  paletteLight = 30;
+                  break;
+                case 41:
+                  paletteBaseHue = 285;
+                  paletteSat = 75;
+                  paletteLight = 55;
+                  break;
+                case 42:
+                  paletteBaseHue = 220;
+                  paletteSat = 10;
+                  paletteLight = 50;
+                  break;
+                case 43:
+                  paletteBaseHue = 50;
+                  paletteSat = 90;
+                  paletteLight = 72;
+                  break;
+                case 44:
+                  paletteBaseHue = 350;
+                  paletteSat = 85;
+                  paletteLight = 40;
+                  break;
+                case 45:
+                  paletteBaseHue = 220;
+                  paletteSat = 80;
+                  paletteLight = 35;
+                  break;
+                case 46:
+                  paletteBaseHue = 35;
+                  paletteSat = 85;
+                  paletteLight = 60;
+                  break;
+                case 47:
+                  paletteBaseHue = 90;
+                  paletteSat = 35;
+                  paletteLight = 55;
+                  break;
+                case 48:
+                  paletteBaseHue = 210;
+                  paletteSat = 8;
+                  paletteLight = 68;
+                  break;
+                case 49:
+                  paletteBaseHue = 215;
+                  paletteSat = 80;
+                  paletteLight = 45;
+                  break;
+                case 50:
+                  paletteBaseHue = 220;
+                  paletteSat = 5;
+                  paletteLight = 50;
+                  break;
+                case 51:
+                  paletteBaseHue = 135;
+                  paletteSat = 80;
+                  paletteLight = 50;
+                  break;
+                case 52:
+                  paletteBaseHue = 45;
+                  paletteSat = 85;
+                  paletteLight = 55;
+                  break;
+              }
+            }
+          }
+        }
+
+        reseedBackground();
+      }
+
+      function pickHue() {
+        const hBase = paletteBaseHue;
+
+        switch (paletteMode) {
+          case 0:
+            return Math.random() * 360;
+          case 1:
+            return hBase + (Math.random() * 80 - 40);
+          case 2:
+            return Math.random() < 0.5 ? hBase : hBase + 180;
+          case 3:
+            return hBase + (Math.random() * 24 - 12);
+          case 4: {
+            const r = Math.random();
+            if (r < 0.7) return 190 + (Math.random() * 30 - 15);
+            return 290 + (Math.random() * 20 - 10);
+          }
+          case 5: {
+            const r = Math.random();
+            if (r < 0.6) return 20 + (Math.random() * 30 - 15);
+            return 190 + (Math.random() * 40 - 20);
+          }
+          case 6:
+            return 120 + (Math.random() * 40 - 20);
+          case 7: {
+            const r = Math.random();
+            if (r < 0.5) return 90 + (Math.random() * 30 - 15);
+            if (r < 0.8) return 10 + (Math.random() * 30 - 15);
+            return 55 + (Math.random() * 20 - 10);
+          }
+          case 8: {
+            const triadIndex = Math.floor(Math.random() * 3);
+            return hBase + triadIndex * 120 + (Math.random() * 40 - 20);
+          }
+          case 9: {
+            const r = Math.random();
+            if (r < 0.75) return 190 + (Math.random() * 20 - 10);
+            return 35 + (Math.random() * 20 - 10);
+          }
+          case 10: {
+            const r = Math.random();
+            if (r < 0.8) return 230 + (Math.random() * 30 - 15);
+            return 350 + (Math.random() * 20 - 10);
+          }
+          case 11: {
+            const r = Math.random();
+            if (r < 0.85) return 215 + (Math.random() * 30 - 15);
+            if (r < 0.92) return 50 + (Math.random() * 15 - 7);
+            return 5 + (Math.random() * 20 - 10);
+          }
+          case 12: {
+            const r = Math.random();
+            if (r < 0.5) return 45 + (Math.random() * 20 - 10);
+            if (r < 0.8) return 80 + (Math.random() * 20 - 10);
+            return 280 + (Math.random() * 30 - 15);
+          }
+          case 13: {
+            const choices = [0, 220, 55, -10];
+            return choices[Math.floor(Math.random() * choices.length)];
+          }
+          case 14: {
+            const r = Math.random();
+            if (r < 0.33) return 25 + (Math.random() * 20 - 10);
+            if (r < 0.66) return 160 + (Math.random() * 20 - 10);
+            return 340 + (Math.random() * 20 - 10);
+          }
+          case 15: {
+            const r = Math.random();
+            if (r < 0.6) return 170 + (Math.random() * 20 - 10);
+            if (r < 0.9) return 310 + (Math.random() * 20 - 10);
+            return 40 + (Math.random() * 20 - 10);
+          }
+          case 16: {
+            const r = Math.random();
+            if (r < 0.4) return 300 + (Math.random() * 20 - 10);
+            if (r < 0.7) return 260 + (Math.random() * 20 - 10);
+            if (r < 0.9) return 210 + (Math.random() * 20 - 10);
+            return 30 + (Math.random() * 20 - 10);
+          }
+          case 17: {
+            const choices = [0, 55, 220];
+            return choices[Math.floor(Math.random() * choices.length)];
+          }
+          case 18: {
+            const r = Math.random();
+            if (r < 0.4) return 190 + (Math.random() * 20 - 10);
+            if (r < 0.75) return 300 + (Math.random() * 20 - 10);
+            return 35 + (Math.random() * 20 - 10);
+          }
+          case 19: {
+            const r = Math.random();
+            if (r < 0.5) return 45 + (Math.random() * 20 - 10);
+            if (r < 0.8) return 350 + (Math.random() * 20 - 10);
+            return 30 + (Math.random() * 10 - 5);
+          }
+          case 20: {
+            const r = Math.random();
+            if (r < 0.5) return 90 + (Math.random() * 20 - 10);
+            if (r < 0.8) return 30 + (Math.random() * 20 - 10);
+            return 210 + (Math.random() * 20 - 10);
+          }
+          case 21: {
+            const r = Math.random();
+            if (r < 0.35) return 45 + (Math.random() * 20 - 10);
+            if (r < 0.6) return 220 + (Math.random() * 20 - 10);
+            if (r < 0.8) return 350 + (Math.random() * 20 - 10);
+            return 280 + (Math.random() * 20 - 10);
+          }
+          case 22: {
+            const r = Math.random();
+            if (r < 0.35) return 350 + (Math.random() * 20 - 10);
+            if (r < 0.6) return 220 + (Math.random() * 20 - 10);
+            if (r < 0.85) return 140 + (Math.random() * 20 - 10);
+            return 45 + (Math.random() * 20 - 10);
+          }
+          case 23: {
+            const r = Math.random();
+            if (r < 0.45) return 45 + (Math.random() * 20 - 10);
+            if (r < 0.75) return 180 + (Math.random() * 20 - 10);
+            return 280 + (Math.random() * 20 - 10);
+          }
+          case 24: {
+            const r = Math.random();
+            if (r < 0.45) return 140 + (Math.random() * 20 - 10);
+            if (r < 0.8) return 0 + (Math.random() * 20 - 10);
+            return 45 + (Math.random() * 20 - 10);
+          }
+          case 25: {
+            const base = hBase || 20;
+            return base + (Math.random() * 20 - 10);
+          }
+          case 26: {
+            const r = Math.random();
+            if (r < 0.6) return 50 + (Math.random() * 15 - 7);
+            if (r < 0.85) return 0 + (Math.random() * 15 - 7);
+            return -10;
+          }
+          case 27: {
+            const r = Math.random();
+            if (r < 0.5) return 100 + (Math.random() * 40 - 20);
+            if (r < 0.85) return 200 + (Math.random() * 30 - 15);
+            return 18 + (Math.random() * 14 - 7);
+          }
+          default:
+            return Math.random() * 360;
+        }
+      }
+
+      function clearBackground(width, height) {
+        ctx.fillStyle = `hsl(${bgHue}, ${bgSat}%, ${bgLight}%)`;
+        ctx.fillRect(0, 0, width, height);
+      }
+
+      function createParticle(width, height) {
+        const centerX = width / 2;
+        const centerY = height / 2;
+
+        const x = centerX + (Math.random() - 0.5) * width * DISPERSION;
+        const y = centerY + (Math.random() - 0.5) * height * DISPERSION;
+
+        const angle = Math.random() * Math.PI * 2;
+        const baseSpeed = (0.08 + Math.random() * 0.45) * (width / 400);
+        const speed = baseSpeed * SPEED_SCALE;
+
+        const sizeFactor =
+          MIN_SIZE_FACTOR +
+          Math.random() * (MAX_SIZE_FACTOR - MIN_SIZE_FACTOR);
+        const baseSize = width * 0.015;
+
+        return {
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          hue: pickHue(),
+          size: baseSize * sizeFactor,
+          life: 0,
+          maxLife: 400 + Math.floor(Math.random() * 600),
+        };
+      }
+
+      function initParticles(width, height) {
+        particles = Array.from(
+          { length: PARTICLE_COUNT },
+          () => createParticle(width, height)
+        );
+      }
+
+      function handleCollisions(width, height) {
+        if (!USE_COLLISIONS) return;
+
+        const maxDist = width * 0.08;
+        const maxDist2 = maxDist * maxDist;
+
+        if (DRAW_COLLISION_LINES) {
+          ctx.globalCompositeOperation = "lighter";
+        }
+
+        for (let i = 0; i < particles.length; i++) {
+          const p = particles[i];
+          for (let j = i + 1; j < particles.length; j++) {
+            const q = particles[j];
+
+            let dx = p.x - q.x;
+            let dy = p.y - q.y;
+
+            if (dx > width / 2) dx -= width;
+            if (dx < -width / 2) dx += width;
+            if (dy > height / 2) dy -= height;
+            if (dy < -height / 2) dy += height;
+
+            const dist2 = dx * dx + dy * dy;
+            if (dist2 >= maxDist2) continue;
+
+            const dist = Math.sqrt(dist2) || 0.001;
+            const t = 1 - dist / maxDist;
+            if (t <= 0) continue;
+
+            const alpha = t * 0.22;
+            if (alpha <= 0) continue;
+
+            if (DRAW_COLLISION_LINES) {
+              ctx.beginPath();
+              ctx.globalAlpha = alpha;
+              ctx.strokeStyle = "#ffffff";
+              ctx.lineWidth = t * (width / 800) * 1.6;
+              ctx.moveTo(p.x, p.y);
+              ctx.lineTo(q.x, q.y);
+              ctx.stroke();
+            }
+
+            const force = t * 0.08;
+            const nx = dx / dist;
+            const ny = dy / dist;
+            p.vx += nx * force;
+            p.vy += ny * force;
+            q.vx -= nx * force;
+            q.vy -= ny * force;
+
+            // colour transfer on contact
+            if (Math.random() < t * 0.5) {
+              if (Math.random() < 0.5) {
+                q.hue = p.hue;
+              } else {
+                p.hue = q.hue;
+              }
+            }
+          }
+        }
+
+        if (DRAW_COLLISION_LINES) {
+          ctx.globalCompositeOperation = "source-over";
+        }
+      }
+
+      function startAnimation(reseedPal = true) {
+        if (animationId !== null) {
+          cancelAnimationFrame(animationId);
+          animationId = null;
+        }
+
+        const { width, height } = setupCanvas();
+
+        if (reseedPal) {
+          reseedUniverse();
+          reseedPalette();
+          updateSeedInUrl();
+        }
+
+        initParticles(width, height);
+        clearBackground(width, height);
+
+        isPaused = false;
+        const pauseLabel = document.querySelector("#pause-btn .btn-label");
+        if (pauseLabel) pauseLabel.textContent = "Pause";
+
+        function animate() {
+          if (isPaused) {
+            animationId = null;
+            return;
+          }
+
+          particles.forEach((particle, idx) => {
+            const baseJitter = 0.45 * (width / 800);
+            const jitter = baseJitter * JITTER_SCALE;
+            particle.vx += (Math.random() - 0.5) * jitter;
+            particle.vy += (Math.random() - 0.5) * jitter;
+
+            particle.vx *= DAMPING;
+            particle.vy *= DAMPING;
+
+            particle.x += particle.vx;
+            particle.y += particle.vy;
+
+            if (particle.x < 0) particle.x += width;
+            if (particle.x > width) particle.x -= width;
+            if (particle.y < 0) particle.y += height;
+            if (particle.y > height) particle.y -= height;
+
+            particle.life++;
+            if (particle.life > particle.maxLife) {
+              particles[idx] = createParticle(width, height);
+              particle = particles[idx];
+            }
+
+            // --- SPLATTERY / FEATHERY BLOB SHAPE (no perfect circles) ---
+
+            const alpha =
+              TRAIL_ALPHA_MIN +
+              Math.random() * (TRAIL_ALPHA_MAX - TRAIL_ALPHA_MIN);
+            const jitterRadiusFactor = 0.85 + Math.random() * 0.3;
+            const radius = particle.size * jitterRadiusFactor;
+
+            // radial gradient for soft feathered edges
+            const gradRadius = radius * 1.6;
+            const grad = ctx.createRadialGradient(
+              particle.x,
+              particle.y,
+              0,
+              particle.x,
+              particle.y,
+              gradRadius
+            );
+            grad.addColorStop(
+              0,
+              `hsla(${particle.hue}, ${paletteSat}%, ${paletteLight}%, ${
+                alpha * 0.9
+              })`
+            );
+            grad.addColorStop(
+              0.4,
+              `hsla(${particle.hue}, ${paletteSat}%, ${paletteLight}%, ${
+                alpha * 0.55
+              })`
+            );
+            grad.addColorStop(
+              0.8,
+              `hsla(${particle.hue}, ${paletteSat}%, ${paletteLight}%, ${
+                alpha * 0.15
+              })`
+            );
+            grad.addColorStop(
+              1,
+              `hsla(${particle.hue}, ${paletteSat}%, ${paletteLight}%, 0)`
+            );
+
+            ctx.fillStyle = grad;
+
+            const spikes = 12 + Math.floor(Math.random() * 10); // 12–21 points
+            const wobble = 0.18 + Math.random() * 0.12; // irregularity of outline
+
+            ctx.beginPath();
+            for (let k = 0; k <= spikes; k++) {
+              const t = (k / spikes) * Math.PI * 2;
+              const r =
+                radius *
+                (1 - wobble + Math.random() * wobble * 2); // in/out jitter
+              const px = particle.x + Math.cos(t) * r;
+              const py = particle.y + Math.sin(t) * r;
+              if (k === 0) ctx.moveTo(px, py);
+              else ctx.lineTo(px, py);
+            }
+            ctx.closePath();
+            ctx.fill();
+
+            // optional extra soft outer halo to merge blobs even more
+            const haloRadius = radius * 2.2;
+            const haloGrad = ctx.createRadialGradient(
+              particle.x,
+              particle.y,
+              radius * 0.7,
+              particle.x,
+              particle.y,
+              haloRadius
+            );
+            const haloAlpha = alpha * 0.35;
+
+            haloGrad.addColorStop(
+              0,
+              `hsla(${particle.hue}, ${paletteSat}%, ${paletteLight}%, ${haloAlpha})`
+            );
+            haloGrad.addColorStop(
+              0.7,
+              `hsla(${particle.hue}, ${paletteSat}%, ${paletteLight}%, ${
+                haloAlpha * 0.4
+              })`
+            );
+            haloGrad.addColorStop(
+              1,
+              `hsla(${particle.hue}, ${paletteSat}%, ${paletteLight}%, 0)`
+            );
+
+            ctx.fillStyle = haloGrad;
+            ctx.beginPath();
+            ctx.arc(particle.x, particle.y, haloRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // slow hue drift
+            particle.hue = (particle.hue + 0.07) % 360;
+          });
+
+          handleCollisions(width, height);
+
+          animationId = requestAnimationFrame(animate);
+        }
+
+        animateRef = animate;
+        animate();
+      }
+
+      function reseed() {
+        startAnimation(true);
+      }
+
+      function togglePause() {
+        const labelEl = document.querySelector("#pause-btn .btn-label");
+        if (!labelEl) return;
+
+        if (!isPaused) {
+          isPaused = true;
+          if (animationId !== null) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+          }
+          labelEl.textContent = "Resume";
+        } else {
+          isPaused = false;
+          if (!animationId && animateRef) {
+            animationId = requestAnimationFrame(animateRef);
+          }
+          labelEl.textContent = "Pause";
+        }
+      }
+
+      // 3000x3000 screenshot
+      function screenshot() {
+        const EXPORT_SIZE = 3000;
+
+        const exportCanvas = document.createElement("canvas");
+        exportCanvas.width = EXPORT_SIZE;
+        exportCanvas.height = EXPORT_SIZE;
+        const exportCtx = exportCanvas.getContext("2d");
+
+        exportCtx.fillStyle = `hsl(${bgHue}, ${bgSat}%, ${bgLight}%)`;
+        exportCtx.fillRect(0, 0, EXPORT_SIZE, EXPORT_SIZE);
+        exportCtx.drawImage(canvas, 0, 0, EXPORT_SIZE, EXPORT_SIZE);
+
+        const paletteSlug = getPaletteSlug();
+        const link = document.createElement("a");
+        link.download = `brownian-motion-${paletteSlug}-${EXPORT_SIZE}x${EXPORT_SIZE}-${Date.now()}.png`;
+        link.href = exportCanvas.toDataURL("image/png");
+        link.click();
+      }
+
+      function handleInteraction(e) {
+        e.preventDefault();
+        reseed();
+      }
+
+      canvas.addEventListener("click", handleInteraction);
+      canvas.addEventListener(
+        "touchstart",
+        function (e) {
+          e.preventDefault();
+          handleInteraction(e);
+        },
+        { passive: false }
+      );
+
+
+      const reseedBtn = document.getElementById("reseed-btn");
+      if (reseedBtn) reseedBtn.addEventListener("click", reseed);
+
+      const pauseBtn = document.getElementById("pause-btn");
+      if (pauseBtn) pauseBtn.addEventListener("click", togglePause);
+
+      const shotBtn = document.getElementById("shot-btn");
+      if (shotBtn) shotBtn.addEventListener("click", screenshot);
+
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "r" || e.key === "R") {
+          reseed();
+        } else if (e.key === "s" || e.key === "S") {
+          screenshot();
+        } else if (e.key === "p" || e.key === "P") {
+          togglePause();
+        }
+      });
+
+      window.addEventListener("resize", () => {
+        startAnimation(false);
+      });
+
+      startAnimation(true);
+    </script>
+  </body>
+</html>
