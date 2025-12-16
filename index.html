@@ -8,10 +8,10 @@
       content="width=device-width,initial-scale=1,viewport-fit=cover"
     />
     <link rel="icon" href="favicon.ico" sizes="any" />
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
-<meta name="theme-color" content="#020617" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
+    <meta name="theme-color" content="#020617" />
     <style>
       :root {
         color-scheme: dark;
@@ -67,12 +67,54 @@
         height: 100%;
         background: #020617;
       }
+
+      /* palette label under canvas */
+      .palette-label {
+        margin-top: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 14px;
+        border-radius: 999px;
+        background: rgba(2, 6, 23, 0.55);
+        border: 1px solid rgba(168, 85, 247, 0.25);
+        box-shadow: 0 16px 35px rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        user-select: none;
+        max-width: min(92vw, 720px);
+      }
+
+      .palette-swatch {
+        width: 14px;
+        height: 14px;
+        border-radius: 6px;
+        background: #a855f7;
+        box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06),
+          0 10px 20px rgba(0, 0, 0, 0.4);
+        flex: 0 0 auto;
+      }
+
+      .palette-name {
+        font-size: 13px;
+        letter-spacing: 0.2px;
+        color: rgba(255, 255, 255, 0.92);
+        font-weight: 600;
+        text-align: center;
+        line-height: 1.1;
+      }
     </style>
   </head>
   <body>
     <div class="frame">
       <div class="canvas-wrapper">
         <canvas id="field"></canvas>
+      </div>
+
+      <!-- centered label under canvas (title only) -->
+      <div class="palette-label" id="palette-label" aria-live="polite">
+        <span class="palette-swatch" id="palette-swatch"></span>
+        <span class="palette-name" id="palette-name">Palette</span>
       </div>
     </div>
 
@@ -103,6 +145,9 @@
       const TRAIL_ALPHA_MAX = 0.75;
 
       // palette state
+      let lastPaletteMode = null;
+      let prevPaletteMode = null;
+
       let paletteMode = 0;
       let paletteBaseHue = 0;
       let paletteSat = 70;
@@ -197,6 +242,23 @@
         return meta ? meta.slug : `palette-${paletteMode}`;
       }
 
+      function getPaletteName() {
+        const meta = PALETTE_META[paletteMode];
+        return meta ? meta.name : `Palette ${paletteMode}`;
+      }
+
+      function updatePaletteLabel() {
+        const nameEl = document.getElementById("palette-name");
+        const swatchEl = document.getElementById("palette-swatch");
+        if (!nameEl || !swatchEl) return;
+
+        nameEl.textContent = getPaletteName();
+
+        // pick one representative color from the current palette logic
+        const swatchHue = (pickHue() + 360) % 360;
+        swatchEl.style.background = `hsl(${swatchHue}, ${paletteSat}%, ${paletteLight}%)`;
+      }
+
       function updateSeedInUrl() {
         const slug = getPaletteSlug();
         const randomPart = Math.random().toString(36).slice(2, 8);
@@ -240,314 +302,341 @@
 
       // palettes: original + cinematic / art / pop
       function reseedPalette() {
-        const r = Math.random();
+        const last = lastPaletteMode;
+        const prev = prevPaletteMode;
 
-        if (r < 0.18) {
-          paletteMode = 0;
-          paletteBaseHue = Math.random() * 360;
-          paletteSat = 95;
-          paletteLight = 60;
-        } else if (r < 0.36) {
-          paletteMode = 1;
-          paletteBaseHue = Math.random() * 360;
-          paletteSat = 70;
-          paletteLight = 82;
-        } else if (r < 0.54) {
-          paletteMode = 2;
-          paletteBaseHue = Math.random() * 360;
-          paletteSat = 90;
-          paletteLight = 65;
-        } else if (r < 0.72) {
-          paletteMode = 3;
-          paletteBaseHue = Math.random() * 360;
-          paletteSat = 55;
-          paletteLight = 58;
-        } else {
-          const pick = Math.floor(Math.random() * 28); // 0–27
-          switch (pick) {
-            case 0:
-              paletteMode = 4;
-              paletteBaseHue = 200;
-              paletteSat = 95;
-              paletteLight = 60;
-              break;
-            case 1:
-              paletteMode = 5;
-              paletteBaseHue = 30;
-              paletteSat = 90;
-              paletteLight = 68;
-              break;
-            case 2:
-              paletteMode = 6;
-              paletteBaseHue = 130;
-              paletteSat = 95;
-              paletteLight = 55;
-              break;
-            case 3:
-              paletteMode = 7;
-              paletteBaseHue = 100;
-              paletteSat = 80;
-              paletteLight = 65;
-              break;
-            case 4:
-              paletteMode = 8;
-              paletteBaseHue = Math.random() * 360;
-              paletteSat = 85;
-              paletteLight = 62;
-              break;
-            case 5:
-              paletteMode = 9;
-              paletteBaseHue = 200;
-              paletteSat = 40;
-              paletteLight = 60;
-              break;
-            case 6:
-              paletteMode = 10;
-              paletteBaseHue = 250;
-              paletteSat = 80;
-              paletteLight = 40;
-              break;
-            case 7:
-              paletteMode = 11;
-              paletteBaseHue = 220;
-              paletteSat = 90;
-              paletteLight = 50;
-              break;
-            case 8:
-              paletteMode = 12;
-              paletteBaseHue = 45;
-              paletteSat = 85;
-              paletteLight = 60;
-              break;
-            case 9:
-              paletteMode = 13;
-              paletteBaseHue = 0;
-              paletteSat = 100;
-              paletteLight = 55;
-              break;
-            case 10:
-              paletteMode = 14;
-              paletteBaseHue = 30;
-              paletteSat = 55;
-              paletteLight = 75;
-              break;
-            case 11:
-              paletteMode = 15;
-              paletteBaseHue = 180;
-              paletteSat = 90;
-              paletteLight = 65;
-              break;
-            case 12:
-              paletteMode = 16;
-              paletteBaseHue = 280;
-              paletteSat = 95;
-              paletteLight = 60;
-              break;
-            case 13:
-              paletteMode = 17;
-              paletteBaseHue = 0;
-              paletteSat = 100;
-              paletteLight = 60;
-              break;
-            case 14:
-              paletteMode = 18;
-              paletteBaseHue = 200;
-              paletteSat = 85;
-              paletteLight = 55;
-              break;
-            case 15:
-              paletteMode = 19;
-              paletteBaseHue = 35;
-              paletteSat = 75;
-              paletteLight = 65;
-              break;
-            case 16:
-              paletteMode = 20;
-              paletteBaseHue = 90;
-              paletteSat = 25;
-              paletteLight = 60;
-              break;
-            case 17:
-              paletteMode = 21;
-              paletteBaseHue = 45;
-              paletteSat = 85;
-              paletteLight = 60;
-              break;
-            case 18:
-              paletteMode = 22;
-              paletteBaseHue = 350;
-              paletteSat = 90;
-              paletteLight = 55;
-              break;
-            case 19:
-              paletteMode = 23;
-              paletteBaseHue = 45;
-              paletteSat = 95;
-              paletteLight = 60;
-              break;
-            case 20:
-              paletteMode = 24;
-              paletteBaseHue = 140;
-              paletteSat = 85;
-              paletteLight = 55;
-              break;
-            case 21:
-              paletteMode = 25;
-              paletteBaseHue = 20;
-              paletteSat = 70;
-              paletteLight = 55;
-              break;
-            case 22:
-              paletteMode = 26;
-              paletteBaseHue = 50;
-              paletteSat = 95;
-              paletteLight = 65;
-              break;
-            case 23:
-              paletteMode = 27;
-              paletteBaseHue = 120;
-              paletteSat = 65;
-              paletteLight = 70;
-              break;
-            case 24:
-              paletteMode = 28;
-              paletteBaseHue = 35;
-              paletteSat = 85;
-              paletteLight = 65;
-              break;
-            case 25:
-              paletteMode = 29;
-              paletteBaseHue = 10;
-              paletteSat = 75;
-              paletteLight = 70;
-              break;
-            case 26:
-              paletteMode = 30;
-              paletteBaseHue = 220;
-              paletteSat = 80;
-              paletteLight = 55;
-              break;
-            case 27:
-              paletteMode = 31;
-              paletteBaseHue = 220;
-              paletteSat = 25;
-              paletteLight = 35;
-              break;
-            default: {
-              const extraIndex = pick - 28; // 0–20
-              const mode = 32 + extraIndex; // 32–52
-              paletteMode = mode;
+        function chooseOnce() {
+          const r = Math.random();
 
-              switch (mode) {
-                case 32:
-                  paletteBaseHue = 345;
-                  paletteSat = 70;
-                  paletteLight = 82;
-                  break;
-                case 33:
-                  paletteBaseHue = 48;
-                  paletteSat = 80;
-                  paletteLight = 78;
-                  break;
-                case 34:
-                  paletteBaseHue = 350;
-                  paletteSat = 70;
-                  paletteLight = 38;
-                  break;
-                case 35:
-                  paletteBaseHue = 40;
-                  paletteSat = 40;
-                  paletteLight = 88;
-                  break;
-                case 36:
-                  paletteBaseHue = 32;
-                  paletteSat = 80;
-                  paletteLight = 55;
-                  break;
-                case 37:
-                  paletteBaseHue = 210;
-                  paletteSat = 25;
-                  paletteLight = 78;
-                  break;
-                case 38:
-                  paletteBaseHue = 215;
-                  paletteSat = 70;
-                  paletteLight = 45;
-                  break;
-                case 39:
-                  paletteBaseHue = 225;
-                  paletteSat = 100;
-                  paletteLight = 50;
-                  break;
-                case 40:
-                  paletteBaseHue = 200;
-                  paletteSat = 65;
-                  paletteLight = 30;
-                  break;
-                case 41:
-                  paletteBaseHue = 285;
-                  paletteSat = 75;
-                  paletteLight = 55;
-                  break;
-                case 42:
-                  paletteBaseHue = 220;
-                  paletteSat = 10;
-                  paletteLight = 50;
-                  break;
-                case 43:
-                  paletteBaseHue = 50;
-                  paletteSat = 90;
-                  paletteLight = 72;
-                  break;
-                case 44:
-                  paletteBaseHue = 350;
-                  paletteSat = 85;
-                  paletteLight = 40;
-                  break;
-                case 45:
-                  paletteBaseHue = 220;
-                  paletteSat = 80;
-                  paletteLight = 35;
-                  break;
-                case 46:
-                  paletteBaseHue = 35;
-                  paletteSat = 85;
-                  paletteLight = 60;
-                  break;
-                case 47:
-                  paletteBaseHue = 90;
-                  paletteSat = 35;
-                  paletteLight = 55;
-                  break;
-                case 48:
-                  paletteBaseHue = 210;
-                  paletteSat = 8;
-                  paletteLight = 68;
-                  break;
-                case 49:
-                  paletteBaseHue = 215;
-                  paletteSat = 80;
-                  paletteLight = 45;
-                  break;
-                case 50:
-                  paletteBaseHue = 220;
-                  paletteSat = 5;
-                  paletteLight = 50;
-                  break;
-                case 51:
-                  paletteBaseHue = 135;
-                  paletteSat = 80;
-                  paletteLight = 50;
-                  break;
-                case 52:
-                  paletteBaseHue = 45;
-                  paletteSat = 85;
-                  paletteLight = 55;
-                  break;
-              }
+          if (r < 0.18) {
+            paletteMode = 0;
+            paletteBaseHue = Math.random() * 360;
+            paletteSat = 95;
+            paletteLight = 60;
+            return;
+          } else if (r < 0.36) {
+            paletteMode = 1;
+            paletteBaseHue = Math.random() * 360;
+            paletteSat = 70;
+            paletteLight = 82;
+            return;
+          } else if (r < 0.54) {
+            paletteMode = 2;
+            paletteBaseHue = Math.random() * 360;
+            paletteSat = 90;
+            paletteLight = 65;
+            return;
+          } else if (r < 0.72) {
+            paletteMode = 3;
+            paletteBaseHue = Math.random() * 360;
+            paletteSat = 55;
+            paletteLight = 58;
+            return;
+          }
+
+          // FIX: now includes both 4–31 (28 palettes) and 32–52 (21 palettes) => 49 total
+          const pick = Math.floor(Math.random() * 49); // 0–48
+
+          if (pick < 28) {
+            // 0–27 => modes 4–31 (keep your existing mapping)
+            switch (pick) {
+              case 0:
+                paletteMode = 4;
+                paletteBaseHue = 200;
+                paletteSat = 95;
+                paletteLight = 60;
+                break;
+              case 1:
+                paletteMode = 5;
+                paletteBaseHue = 30;
+                paletteSat = 90;
+                paletteLight = 68;
+                break;
+              case 2:
+                paletteMode = 6;
+                paletteBaseHue = 130;
+                paletteSat = 95;
+                paletteLight = 55;
+                break;
+              case 3:
+                paletteMode = 7;
+                paletteBaseHue = 100;
+                paletteSat = 80;
+                paletteLight = 65;
+                break;
+              case 4:
+                paletteMode = 8;
+                paletteBaseHue = Math.random() * 360;
+                paletteSat = 85;
+                paletteLight = 62;
+                break;
+              case 5:
+                paletteMode = 9;
+                paletteBaseHue = 200;
+                paletteSat = 40;
+                paletteLight = 60;
+                break;
+              case 6:
+                paletteMode = 10;
+                paletteBaseHue = 250;
+                paletteSat = 80;
+                paletteLight = 40;
+                break;
+              case 7:
+                paletteMode = 11;
+                paletteBaseHue = 220;
+                paletteSat = 90;
+                paletteLight = 50;
+                break;
+              case 8:
+                paletteMode = 12;
+                paletteBaseHue = 45;
+                paletteSat = 85;
+                paletteLight = 60;
+                break;
+              case 9:
+                paletteMode = 13;
+                paletteBaseHue = 0;
+                paletteSat = 100;
+                paletteLight = 55;
+                break;
+              case 10:
+                paletteMode = 14;
+                paletteBaseHue = 30;
+                paletteSat = 55;
+                paletteLight = 75;
+                break;
+              case 11:
+                paletteMode = 15;
+                paletteBaseHue = 180;
+                paletteSat = 90;
+                paletteLight = 65;
+                break;
+              case 12:
+                paletteMode = 16;
+                paletteBaseHue = 280;
+                paletteSat = 95;
+                paletteLight = 60;
+                break;
+              case 13:
+                paletteMode = 17;
+                paletteBaseHue = 0;
+                paletteSat = 100;
+                paletteLight = 60;
+                break;
+              case 14:
+                paletteMode = 18;
+                paletteBaseHue = 200;
+                paletteSat = 85;
+                paletteLight = 55;
+                break;
+              case 15:
+                paletteMode = 19;
+                paletteBaseHue = 35;
+                paletteSat = 75;
+                paletteLight = 65;
+                break;
+              case 16:
+                paletteMode = 20;
+                paletteBaseHue = 90;
+                paletteSat = 25;
+                paletteLight = 60;
+                break;
+              case 17:
+                paletteMode = 21;
+                paletteBaseHue = 45;
+                paletteSat = 85;
+                paletteLight = 60;
+                break;
+              case 18:
+                paletteMode = 22;
+                paletteBaseHue = 350;
+                paletteSat = 90;
+                paletteLight = 55;
+                break;
+              case 19:
+                paletteMode = 23;
+                paletteBaseHue = 45;
+                paletteSat = 95;
+                paletteLight = 60;
+                break;
+              case 20:
+                paletteMode = 24;
+                paletteBaseHue = 140;
+                paletteSat = 85;
+                paletteLight = 55;
+                break;
+              case 21:
+                paletteMode = 25;
+                paletteBaseHue = 20;
+                paletteSat = 70;
+                paletteLight = 55;
+                break;
+              case 22:
+                paletteMode = 26;
+                paletteBaseHue = 50;
+                paletteSat = 95;
+                paletteLight = 65;
+                break;
+              case 23:
+                paletteMode = 27;
+                paletteBaseHue = 120;
+                paletteSat = 65;
+                paletteLight = 70;
+                break;
+              case 24:
+                paletteMode = 28;
+                paletteBaseHue = 35;
+                paletteSat = 85;
+                paletteLight = 65;
+                break;
+              case 25:
+                paletteMode = 29;
+                paletteBaseHue = 10;
+                paletteSat = 75;
+                paletteLight = 70;
+                break;
+              case 26:
+                paletteMode = 30;
+                paletteBaseHue = 220;
+                paletteSat = 80;
+                paletteLight = 55;
+                break;
+              case 27:
+                paletteMode = 31;
+                paletteBaseHue = 220;
+                paletteSat = 25;
+                paletteLight = 35;
+                break;
+            }
+          } else {
+            // 28–48 => modes 32–52
+            const mode = 32 + (pick - 28);
+            paletteMode = mode;
+
+            switch (mode) {
+              case 32:
+                paletteBaseHue = 345;
+                paletteSat = 70;
+                paletteLight = 82;
+                break;
+              case 33:
+                paletteBaseHue = 48;
+                paletteSat = 80;
+                paletteLight = 78;
+                break;
+              case 34:
+                paletteBaseHue = 350;
+                paletteSat = 70;
+                paletteLight = 38;
+                break;
+              case 35:
+                paletteBaseHue = 40;
+                paletteSat = 40;
+                paletteLight = 88;
+                break;
+              case 36:
+                paletteBaseHue = 32;
+                paletteSat = 80;
+                paletteLight = 55;
+                break;
+              case 37:
+                paletteBaseHue = 210;
+                paletteSat = 25;
+                paletteLight = 78;
+                break;
+              case 38:
+                paletteBaseHue = 215;
+                paletteSat = 70;
+                paletteLight = 45;
+                break;
+              case 39:
+                paletteBaseHue = 225;
+                paletteSat = 100;
+                paletteLight = 50;
+                break;
+              case 40:
+                paletteBaseHue = 200;
+                paletteSat = 65;
+                paletteLight = 30;
+                break;
+              case 41:
+                paletteBaseHue = 285;
+                paletteSat = 75;
+                paletteLight = 55;
+                break;
+              case 42:
+                paletteBaseHue = 220;
+                paletteSat = 10;
+                paletteLight = 50;
+                break;
+              case 43:
+                paletteBaseHue = 50;
+                paletteSat = 90;
+                paletteLight = 72;
+                break;
+              case 44:
+                paletteBaseHue = 350;
+                paletteSat = 85;
+                paletteLight = 40;
+                break;
+              case 45:
+                paletteBaseHue = 220;
+                paletteSat = 80;
+                paletteLight = 35;
+                break;
+              case 46:
+                paletteBaseHue = 35;
+                paletteSat = 85;
+                paletteLight = 60;
+                break;
+              case 47:
+                paletteBaseHue = 90;
+                paletteSat = 35;
+                paletteLight = 55;
+                break;
+              case 48:
+                paletteBaseHue = 210;
+                paletteSat = 8;
+                paletteLight = 68;
+                break;
+              case 49:
+                paletteBaseHue = 215;
+                paletteSat = 80;
+                paletteLight = 45;
+                break;
+              case 50:
+                paletteBaseHue = 220;
+                paletteSat = 5;
+                paletteLight = 50;
+                break;
+              case 51:
+                paletteBaseHue = 135;
+                paletteSat = 80;
+                paletteLight = 50;
+                break;
+              case 52:
+                paletteBaseHue = 45;
+                paletteSat = 85;
+                paletteLight = 55;
+                break;
             }
           }
         }
+
+        // Anti-repeat: avoid same as last, and avoid ABAB ping-pong by also avoiding prev
+        let attempts = 0;
+        do {
+          chooseOnce();
+          attempts++;
+        } while (
+          attempts < 10 &&
+          (paletteMode === last || paletteMode === prev)
+        );
+
+        // update history
+        prevPaletteMode = lastPaletteMode;
+        lastPaletteMode = paletteMode;
 
         reseedBackground();
       }
@@ -717,8 +806,7 @@
         const speed = baseSpeed * SPEED_SCALE;
 
         const sizeFactor =
-          MIN_SIZE_FACTOR +
-          Math.random() * (MAX_SIZE_FACTOR - MIN_SIZE_FACTOR);
+          MIN_SIZE_FACTOR + Math.random() * (MAX_SIZE_FACTOR - MIN_SIZE_FACTOR);
         const baseSize = width * 0.015;
 
         return {
@@ -734,9 +822,8 @@
       }
 
       function initParticles(width, height) {
-        particles = Array.from(
-          { length: PARTICLE_COUNT },
-          () => createParticle(width, height)
+        particles = Array.from({ length: PARTICLE_COUNT }, () =>
+          createParticle(width, height)
         );
       }
 
@@ -818,7 +905,10 @@
         if (reseedPal) {
           reseedUniverse();
           reseedPalette();
-          updateSeedInUrl();
+          updateSeedInUrl(); // seed stays URL-only
+          updatePaletteLabel(); // title + swatch update
+        } else {
+          updatePaletteLabel();
         }
 
         initParticles(width, height);
@@ -857,15 +947,12 @@
               particle = particles[idx];
             }
 
-            // --- SPLATTERY / FEATHERY BLOB SHAPE (no perfect circles) ---
-
             const alpha =
               TRAIL_ALPHA_MIN +
               Math.random() * (TRAIL_ALPHA_MAX - TRAIL_ALPHA_MIN);
             const jitterRadiusFactor = 0.85 + Math.random() * 0.3;
             const radius = particle.size * jitterRadiusFactor;
 
-            // radial gradient for soft feathered edges
             const gradRadius = radius * 1.6;
             const grad = ctx.createRadialGradient(
               particle.x,
@@ -900,15 +987,13 @@
 
             ctx.fillStyle = grad;
 
-            const spikes = 12 + Math.floor(Math.random() * 10); // 12–21 points
-            const wobble = 0.18 + Math.random() * 0.12; // irregularity of outline
+            const spikes = 12 + Math.floor(Math.random() * 10);
+            const wobble = 0.18 + Math.random() * 0.12;
 
             ctx.beginPath();
             for (let k = 0; k <= spikes; k++) {
               const t = (k / spikes) * Math.PI * 2;
-              const r =
-                radius *
-                (1 - wobble + Math.random() * wobble * 2); // in/out jitter
+              const r = radius * (1 - wobble + Math.random() * wobble * 2);
               const px = particle.x + Math.cos(t) * r;
               const py = particle.y + Math.sin(t) * r;
               if (k === 0) ctx.moveTo(px, py);
@@ -917,7 +1002,6 @@
             ctx.closePath();
             ctx.fill();
 
-            // optional extra soft outer halo to merge blobs even more
             const haloRadius = radius * 2.2;
             const haloGrad = ctx.createRadialGradient(
               particle.x,
@@ -949,12 +1033,10 @@
             ctx.arc(particle.x, particle.y, haloRadius, 0, Math.PI * 2);
             ctx.fill();
 
-            // slow hue drift
             particle.hue = (particle.hue + 0.07) % 360;
           });
 
           handleCollisions(width, height);
-
           animationId = requestAnimationFrame(animate);
         }
 
@@ -986,7 +1068,6 @@
         }
       }
 
-      // 3000x3000 screenshot
       function screenshot() {
         const EXPORT_SIZE = 3000;
 
@@ -1021,7 +1102,6 @@
         { passive: false }
       );
 
-
       const reseedBtn = document.getElementById("reseed-btn");
       if (reseedBtn) reseedBtn.addEventListener("click", reseed);
 
@@ -1049,5 +1129,3 @@
     </script>
   </body>
 </html>
-
-
